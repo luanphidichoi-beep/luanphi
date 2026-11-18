@@ -59,6 +59,7 @@ button{font-family:var(--display);font-weight:800;font-size:20px;width:100%;bord
 button:active{transform:translateY(3px);box-shadow:0 3px 0 #b8862c}
 button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 .small{font-size:12px;color:var(--muted);margin-top:12px;text-align:center}
+.warn{background:rgba(255,111,97,.12);border-radius:12px;padding:10px 12px;margin:0 0 14px;font-size:14px;line-height:1.5}
 </style>
 
 <div id="app">
@@ -77,9 +78,10 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
       <ul>
         <li><span>📱</span><span><strong>Nghiêng điện thoại</strong> sang trái hoặc phải để đẩy người lại cho thẳng.</span></li>
         <li><span>⚠️</span><span>Khi một thứ gây xao nhãng hiện ra ở bên nào, nó sẽ <strong>kéo người về bên đó</strong>. Nghiêng ngược lại trước khi nó tới.</span></li>
-        <li><span>👆</span><span>Không có cảm biến? Chạm giữ nửa trái hoặc phải màn hình. Trên máy tính dùng phím ← →.</span></li>
+        <li><span>🙌</span><span><strong>Không chạm vào màn hình.</strong> Chỉ nghiêng máy thôi. Cầm máy thẳng rồi mới bấm Bắt đầu. (Trên máy tính dùng phím ← → để thử.)</span></li>
         <li><span>📖</span><span>Ngồi càng thẳng thì học càng nhanh, được nhiều trang hơn.</span></li>
       </ul>
+      <p class="warn" id="sensorMsg" hidden>Chưa đọc được cảm biến nghiêng. Hãy mở game bằng Safari hoặc Chrome qua link github.io, chọn <strong>Cho phép</strong> khi máy hỏi quyền chuyển động, rồi bấm lại.</p>
       <button id="startBtn" type="button">Bắt đầu học</button>
       <div class="small" id="bestStart"></div>
     </div>
@@ -143,7 +145,8 @@ $('bestStart').textContent = best ? `Kỷ lục của bạn: ${best} trang` : ''
 
 /* ---------- Điều khiển ---------- */
 let rawTilt = 0, baseline = 0, tiltSeen = false;
-let touchDir = 0, keyDir = 0, smoothedTouch = 0;
+let keyDir = 0, smoothedTouch = 0;
+const isTouch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
 
 function onOrient(e){
   if (e.gamma == null) return;
@@ -156,24 +159,16 @@ function onOrient(e){
 async function enableTilt(){
   try {
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
-      const r = await DeviceOrientationEvent.requestPermission();
-      if (r !== 'granted') return;
+      await DeviceOrientationEvent.requestPermission();
     }
-    window.addEventListener('deviceorientation', onOrient);
   } catch(e) {}
+  window.removeEventListener('deviceorientation', onOrient);
+  window.addEventListener('deviceorientation', onOrient);
 }
 function updateMode(){
-  $('mode').textContent = tiltSeen ? 'Điều khiển: nghiêng điện thoại' : 'Điều khiển: chạm giữ trái / phải hoặc phím ← →';
+  $('mode').textContent = tiltSeen ? 'Điều khiển: nghiêng điện thoại' : (isTouch ? 'Đang chờ cảm biến nghiêng...' : 'Điều khiển: phím ← →');
 }
 
-const pointers = new Map();
-function recomputeTouch(){
-  let d = 0; pointers.forEach(x => { d += x < W / 2 ? -1 : 1; });
-  touchDir = clamp(d, -1, 1);
-}
-cv.addEventListener('pointerdown', e => { pointers.set(e.pointerId, e.clientX); recomputeTouch(); });
-cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)){ pointers.set(e.pointerId, e.clientX); recomputeTouch(); } });
-['pointerup','pointercancel','pointerleave'].forEach(n => cv.addEventListener(n, e => { pointers.delete(e.pointerId); recomputeTouch(); }));
 const keys = {};
 window.addEventListener('keydown', e => {
   if (['ArrowLeft','ArrowRight','a','d','A','D'].includes(e.key)){ keys[e.key.toLowerCase()] = 1; e.preventDefault(); }
@@ -185,7 +180,7 @@ window.addEventListener('keyup', e => {
 });
 
 function readInput(dt){
-  const manual = touchDir || keyDir;
+  const manual = keyDir;
   smoothedTouch += (manual - smoothedTouch) * Math.min(1, dt * 7);
   if (manual || !tiltSeen) return smoothedTouch;
   let v = rawTilt - baseline;
@@ -200,7 +195,14 @@ async function start(){
   $('startScreen').hidden = true; $('overScreen').hidden = true;
   try { wakeLock = await navigator.wakeLock?.request('screen'); } catch(e) {}
 }
-$('startBtn').addEventListener('click', () => { enableTilt(); updateMode(); start(); });
+$('startBtn').addEventListener('click', async () => {
+  if (!tiltSeen) await enableTilt();
+  if (!tiltSeen) await new Promise(r => setTimeout(r, 1200));
+  updateMode();
+  if (!tiltSeen && isTouch){ $('sensorMsg').hidden = false; return; }
+  $('sensorMsg').hidden = true;
+  start();
+});
 $('againBtn').addEventListener('click', () => { if (tiltSeen) baseline = Math.abs(rawTilt) < 15 ? rawTilt : 0; start(); });
 
 function spawn(){

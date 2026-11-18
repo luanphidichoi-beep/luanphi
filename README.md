@@ -5,7 +5,7 @@ Game giữ thăng bằng cho một bạn đang ngồi học bài buổi tối. M
 ## Cách chơi
 
 - **Điện thoại:** nghiêng trái / phải để đẩy người lại cho thẳng.
-- **Không có cảm biến:** chạm giữ nửa trái hoặc nửa phải màn hình.
+- Không dùng chạm màn hình. Nếu chưa đọc được cảm biến, game sẽ báo để bạn cấp quyền rồi thử lại.
 - **Máy tính:** phím ← → (hoặc A / D).
 - Mỗi thứ gây xao nhãng hiện cảnh báo ở một bên trước khoảng 1 giây, rồi kéo người về phía đó. Nghiêng ngược lại trước khi nó tới.
 - Ngồi càng thẳng thì học càng nhanh, được nhiều "trang" hơn. Càng về khuya, game càng khó.
