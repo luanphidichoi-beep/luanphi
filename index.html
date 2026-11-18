@@ -117,6 +117,8 @@ button.friend .p{color:var(--lamp);font-variant-numeric:tabular-nums}
       </div>
       <p class="warn" id="sensorMsg" hidden>Chưa đọc được cảm biến nghiêng. Hãy mở game bằng Safari hoặc Chrome qua link github.io, chọn <strong>Cho phép</strong> khi máy hỏi quyền chuyển động, rồi bấm lại.</p>
       <button id="startBtn" type="button">Bắt đầu học</button>
+      <button id="botBtn" class="ghost" type="button" style="width:100%;margin-top:10px">Thử với bạn ảo</button>
+      <div class="small" style="margin-top:6px">Hai bạn ảo học cùng phòng và ném xao nhãng sang bàn bạn. Dùng để thử phần học chung.</div>
       <div class="small" id="bestStart"></div>
     </div>
   </div>
@@ -234,7 +236,10 @@ async function start(){
   $('startScreen').hidden = true; $('overScreen').hidden = true;
   try { wakeLock = await navigator.wakeLock?.request('screen'); } catch(e) {}
 }
-$('startBtn').addEventListener('click', async () => {
+let useBots = false;
+$('startBtn').addEventListener('click', () => { useBots = false; begin(); });
+$('botBtn').addEventListener('click', () => { useBots = true; begin(); });
+async function begin(){
   if (!tiltSeen) await enableTilt();
   if (!tiltSeen) await new Promise(r => setTimeout(r, 1200));
   updateMode();
@@ -242,7 +247,7 @@ $('startBtn').addEventListener('click', async () => {
   $('sensorMsg').hidden = true;
   await joinFromForm();
   start();
-});
+}
 $('againBtn').addEventListener('click', () => { if (tiltSeen) baseline = Math.abs(rawTilt) < 15 ? rawTilt : 0; start(); });
 
 function spawn(){
@@ -356,20 +361,55 @@ async function initNet(){
   };
 }
 
+/* Bạn ảo: giả lập một phòng có 2 người để thử khi chưa cài Firebase. */
+const botNet = {
+  join(code, id){
+    let onP = null, onA = null, me = null;
+    const bots = [
+      { id:'bot-an',   name:'An (ảo)',   f:0, pages:0, state:'playing', skill:0.85, rest:0 },
+      { id:'bot-binh', name:'Bình (ảo)', f:0, pages:0, state:'playing', skill:0.7,  rest:0 },
+    ];
+    const emit = () => {
+      if (!onP) return;
+      const p = {}; if (me) p[id] = me;
+      for (const b of bots) p[b.id] = { name:b.name, pages:b.pages, state:b.state, best:0 };
+      onP(p);
+    };
+    const timer = setInterval(() => {
+      for (const b of bots){
+        if (b.state === 'playing'){
+          b.f += rand(0.8, 1.6); b.pages = Math.floor(b.f / 3);
+          if (Math.random() < (1 - b.skill) * 0.04){ b.state = 'fallen'; b.rest = 5; }
+          if (onA && G.running && !G.falling && G.t > 8 && Math.random() < 0.035)
+            onA({ idx: THROWABLE[Math.floor(Math.random() * THROWABLE.length)], from: b.name });
+        } else if (--b.rest <= 0){ b.state = 'playing'; b.f = 0; b.pages = 0; }
+      }
+      emit();
+    }, 1000);
+    return {
+      set(d){ me = d; emit(); },
+      onPlayers(cb){ onP = cb; emit(); },
+      onAttack(cb){ onA = cb; },
+      throwAt(t){ const b = bots.find(x => x.id === t); if (b && b.state === 'playing' && Math.random() < 0.5){ b.state = 'fallen'; b.rest = 5; } },
+      leave(){ clearInterval(timer); },
+    };
+  },
+};
+
 function cleanCode(v){ return (v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); }
 function newCode(){ const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 5; i++) c += a[Math.floor(Math.random() * a.length)]; return c; }
 function myName(){ return ($('nameIn').value.trim() || 'Bạn ẩn danh').slice(0, 14); }
 
 async function joinFromForm(){
-  if (!net) return;
-  const code = cleanCode($('roomIn').value);
+  const api = useBots ? botNet : net;
+  const code = useBots ? 'BANAO' : (net ? cleanCode($('roomIn').value) : '');
   store.set('ngoivung-name', $('nameIn').value.trim());
   if (code === roomCode) return;
   if (room){ room.leave(); room = null; players = {}; }
   roomCode = code;
   renderFriends();
   if (!code) return;
-  room = net.join(code, myId);
+  room = api.join(code, myId);
   room.onPlayers(p => {
     for (const [id, pl] of Object.entries(p)){
       const old = players[id];
