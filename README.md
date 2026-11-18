@@ -17,3 +17,24 @@ Toàn bộ game nằm trong một file `index.html`, không cần cài gì.
 Cảm biến nghiêng của điện thoại chỉ hoạt động khi trang được mở qua **HTTPS**. Cách đơn giản nhất là bật GitHub Pages:
 Settings → Pages → Source: *Deploy from a branch* → chọn nhánh chứa file này, thư mục `/ (root)`.
 Trên iPhone, trình duyệt sẽ hỏi quyền truy cập chuyển động khi bấm "Bắt đầu học". Hãy chọn Cho phép.
+
+## Học chung: phòng riêng và ném xao nhãng
+
+Khi đã cấu hình Firebase, màn hình bắt đầu có thêm ô **Tên** và **Mã phòng**. Ai nhập cùng một mã sẽ vào cùng phòng:
+
+- Tên các bạn trong phòng hiện ở đầu màn hình: 🪑 đang học, 💥 vừa ngã, 💤 đang nghỉ.
+- Mỗi 5 trang học được bạn có thêm 1 **lượt ném** (tối đa 3). Chạm vào tên một bạn để ném một thứ gây xao nhãng (📱 🎮 🍜 🎤 🐈) sang bàn bạn ấy. Bạn ấy sẽ thấy cảnh báo "An ném: Mèo nhảy lên bàn".
+- Khi ngã, bảng xếp hạng của phòng hiện ra.
+
+### Cài Firebase (miễn phí, khoảng 5 phút)
+
+1. Vào https://console.firebase.google.com → **Add project** → đặt tên → tạo.
+2. Menu bên trái: **Build → Realtime Database → Create database** → chọn vị trí Singapore (`asia-southeast1`) → **Start in test mode**.
+3. Tab **Rules**, dán đoạn sau rồi **Publish** (chỉ cho đọc/ghi trong mục `rooms`):
+   ```json
+   { "rules": { "rooms": { "$room": { ".read": true, ".write": true } } } }
+   ```
+4. **Project settings** (bánh răng) → **General** → mục *Your apps* → bấm biểu tượng `</>` (Web) → đặt tên → **Register app**. Copy đoạn `firebaseConfig`.
+5. Mở file `firebase-config.js`, thay `null` bằng đoạn cấu hình vừa copy (phải có dòng `databaseURL`).
+
+Lưu ý: ai biết mã phòng đều vào được phòng đó, nên đừng dùng tên thật đầy đủ hay thông tin riêng tư làm tên.
