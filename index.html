@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box;height:100%}*,*::before,*::after{box-sizing:border-box}body{margin:0}</style>
+</head>
+<body>
+<title>Ngồi Vững</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Be+Vietnam+Pro:wght@400;600&display=swap">
+<style>
+/* Một căn phòng học ban đêm: tường xanh đêm, ánh đèn bàn vàng ấm. Một màn hình duy nhất, overlay ở giữa. */
+:root{
+  --night:#121829; --panel:#1c2440; --lamp:#ffc45c; --ink:#f4efe4;
+  --muted:#a3acc8; --danger:#ff6f61; --ok:#62d2a2;
+  --display:'Baloo 2', 'Trebuchet MS', system-ui, sans-serif;
+  --body:'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--night);color:var(--ink);font-family:var(--body);overflow:hidden;
+  touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#app{position:relative;height:100%;overflow:hidden}
+canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+  padding-top:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.chip{background:rgba(18,24,41,.72);border:1px solid rgba(255,196,92,.25);border-radius:12px;padding:6px 12px;
+  font-variant-numeric:tabular-nums;backdrop-filter:blur(4px)}
+.chip b{display:block;font-family:var(--display);font-size:22px;line-height:1.1;color:var(--lamp)}
+.chip span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.chip.r{text-align:right}
+#banner{position:absolute;left:50%;top:78px;transform:translateX(-50%);max-width:calc(100% - 32px);text-align:center;
+  font-family:var(--display);font-weight:800;font-size:20px;padding:6px 16px;border-radius:999px;
+  background:var(--danger);color:#1a0d0b;box-shadow:0 6px 24px rgba(255,111,97,.35);pointer-events:none;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+#mode{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:12px;color:var(--muted);pointer-events:none}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:rgba(10,14,26,.66);backdrop-filter:blur(3px)}
+.card{background:var(--panel);border:1px solid rgba(255,196,92,.3);border-radius:20px;padding:24px 22px;max-width:380px;width:100%;
+  box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.card h1{font-family:var(--display);font-weight:800;font-size:44px;line-height:1;margin:0 0 6px;color:var(--lamp);text-wrap:balance}
+.card h2{font-family:var(--display);font-weight:800;font-size:34px;line-height:1.1;margin:0 0 4px;color:var(--danger)}
+.card p{margin:0 0 14px;line-height:1.5;color:var(--ink)}
+.card ul{list-style:none;margin:0 0 18px;padding:0;display:grid;gap:10px}
+.card li{display:grid;grid-template-columns:28px 1fr;gap:8px;line-height:1.45;font-size:14px;color:var(--muted)}
+.card li strong{color:var(--ink);font-weight:600}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 18px}
+.stat{background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px}
+.stat span{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stat b{font-family:var(--display);font-size:24px;color:var(--ink);font-variant-numeric:tabular-nums}
+.cause{background:rgba(255,111,97,.12);border-radius:12px;padding:10px 12px;margin-top:10px;font-size:15px}
+button{font-family:var(--display);font-weight:800;font-size:20px;width:100%;border:0;border-radius:14px;padding:12px 16px;
+  background:var(--lamp);color:#2a1b00;cursor:pointer;box-shadow:0 6px 0 #b8862c}
+button:active{transform:translateY(3px);box-shadow:0 3px 0 #b8862c}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.small{font-size:12px;color:var(--muted);margin-top:12px;text-align:center}
+</style>
+
+<div id="app">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="chip"><span>Giờ</span><b id="clock">20:00</b></div>
+    <div class="chip r"><span>Trang đã học</span><b id="pages">0</b></div>
+  </div>
+  <div id="banner" hidden></div>
+  <div id="mode"></div>
+
+  <div class="overlay" id="startScreen">
+    <div class="card">
+      <h1>Ngồi Vững</h1>
+      <p>Tối nay phải học bài. Đủ thứ xung quanh sẽ kéo bạn ấy ngã khỏi ghế. Giữ cho bạn ấy ngồi thẳng càng lâu càng tốt.</p>
+      <ul>
+        <li><span>📱</span><span><strong>Nghiêng điện thoại</strong> sang trái hoặc phải để đẩy người lại cho thẳng.</span></li>
+        <li><span>⚠️</span><span>Khi một thứ gây xao nhãng hiện ra ở bên nào, nó sẽ <strong>kéo người về bên đó</strong>. Nghiêng ngược lại trước khi nó tới.</span></li>
+        <li><span>👆</span><span>Không có cảm biến? Chạm giữ nửa trái hoặc phải màn hình. Trên máy tính dùng phím ← →.</span></li>
+        <li><span>📖</span><span>Ngồi càng thẳng thì học càng nhanh, được nhiều trang hơn.</span></li>
+      </ul>
+      <button id="startBtn" type="button">Bắt đầu học</button>
+      <div class="small" id="bestStart"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="overScreen" hidden>
+    <div class="card">
+      <h2>Ngã rồi!</h2>
+      <div class="cause" id="cause"></div>
+      <div class="stats">
+        <div class="stat"><span>Ngồi được</span><b id="sTime">0 phút</b></div>
+        <div class="stat"><span>Trang đã học</span><b id="sPages">0</b></div>
+        <div class="stat"><span>Kỷ lục</span><b id="sBest">0</b></div>
+        <div class="stat"><span>Né được</span><b id="sDodged">0</b></div>
+      </div>
+      <button id="againBtn" type="button">Học lại</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+let W = 0, H = 0, S = 1, DPR = 1;
+
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  S = Math.min(W / 400, H / 640);
+}
+window.addEventListener('resize', resize); resize();
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a, b) => a + Math.random() * (b - a);
+
+/* Những thứ gây xao nhãng. f(t) là lực kéo về phía nó xuất hiện. min = sau bao nhiêu giây mới bắt đầu xuất hiện. */
+const EVENTS = [
+  { icon:'📱', name:'Tin nhắn Zalo',        dur:0.30, f:() => 4.2,  min:0 },
+  { icon:'🎮', name:'Bạn rủ đi chơi game',  dur:0.35, f:() => 4.2,  min:10 },
+  { icon:'🌀', name:'Quạt thổi mạnh',       dur:3.0,  f:() => 1.9,  min:6 },
+  { icon:'🍜', name:'Mùi mì tôm dưới bếp',   dur:3.5,  f:t => Math.min(1, t / 1.4) * 2.6, min:14 },
+  { icon:'🎤', name:'Hàng xóm hát karaoke', dur:4.0,  f:t => 3.4 * Math.sin(t * 6.5), min:18, wobble:true },
+  { icon:'🐈', name:'Mèo nhảy lên bàn',     dur:0.25, f:() => 6.8,  min:24 },
+  { icon:'🗣️', name:'Mẹ gọi xuống ăn cơm',  dur:0.45, f:() => 3.6,  min:30 },
+  { icon:'😴', name:'Buồn ngủ quá',         dur:5.0,  sleepy:true,   min:36 },
+];
+
+const G = {};
+function reset(){
+  Object.assign(G, { running:false, over:false, falling:false, t:0, theta:0, omega:0, input:0,
+    focus:0, events:[], next:2.2, cause:null, sleepy:0, shake:0, dodged:0, notes:[] });
+}
+reset();
+
+let best = 0;
+try { best = +localStorage.getItem('ngoivung-best') || 0; } catch(e) {}
+$('bestStart').textContent = best ? `Kỷ lục của bạn: ${best} trang` : '';
+
+/* ---------- Điều khiển ---------- */
+let rawTilt = 0, baseline = 0, tiltSeen = false;
+let touchDir = 0, keyDir = 0, smoothedTouch = 0;
+
+function onOrient(e){
+  if (e.gamma == null) return;
+  const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  let v = e.gamma;
+  if (ang === 90) v = e.beta; else if (ang === -90 || ang === 270) v = -e.beta; else if (ang === 180) v = -e.gamma;
+  if (!tiltSeen){ tiltSeen = true; baseline = Math.abs(v) < 15 ? v : 0; updateMode(); }
+  rawTilt = v;
+}
+async function enableTilt(){
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== 'granted') return;
+    }
+    window.addEventListener('deviceorientation', onOrient);
+  } catch(e) {}
+}
+function updateMode(){
+  $('mode').textContent = tiltSeen ? 'Điều khiển: nghiêng điện thoại' : 'Điều khiển: chạm giữ trái / phải hoặc phím ← →';
+}
+
+const pointers = new Map();
+function recomputeTouch(){
+  let d = 0; pointers.forEach(x => { d += x < W / 2 ? -1 : 1; });
+  touchDir = clamp(d, -1, 1);
+}
+cv.addEventListener('pointerdown', e => { pointers.set(e.pointerId, e.clientX); recomputeTouch(); });
+cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)){ pointers.set(e.pointerId, e.clientX); recomputeTouch(); } });
+['pointerup','pointercancel','pointerleave'].forEach(n => cv.addEventListener(n, e => { pointers.delete(e.pointerId); recomputeTouch(); }));
+const keys = {};
+window.addEventListener('keydown', e => {
+  if (['ArrowLeft','ArrowRight','a','d','A','D'].includes(e.key)){ keys[e.key.toLowerCase()] = 1; e.preventDefault(); }
+  keyDir = (keys.arrowright||keys.d ? 1 : 0) - (keys.arrowleft||keys.a ? 1 : 0);
+});
+window.addEventListener('keyup', e => {
+  keys[e.key.toLowerCase()] = 0;
+  keyDir = (keys.arrowright||keys.d ? 1 : 0) - (keys.arrowleft||keys.a ? 1 : 0);
+});
+
+function readInput(dt){
+  const manual = touchDir || keyDir;
+  smoothedTouch += (manual - smoothedTouch) * Math.min(1, dt * 7);
+  if (manual || !tiltSeen) return smoothedTouch;
+  let v = rawTilt - baseline;
+  v = Math.abs(v) < 2 ? 0 : v - Math.sign(v) * 2;
+  return clamp(v / 22, -1, 1);
+}
+
+/* ---------- Vòng lặp game ---------- */
+let wakeLock = null;
+async function start(){
+  reset(); G.running = true;
+  $('startScreen').hidden = true; $('overScreen').hidden = true;
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch(e) {}
+}
+$('startBtn').addEventListener('click', () => { enableTilt(); updateMode(); start(); });
+$('againBtn').addEventListener('click', () => { if (tiltSeen) baseline = Math.abs(rawTilt) < 15 ? rawTilt : 0; start(); });
+
+function spawn(){
+  const level = G.t;
+  const pool = EVENTS.filter(e => e.min <= level && !(e.sleepy && G.events.some(x => x.def.sleepy)));
+  const def = pool[Math.floor(Math.random() * pool.length)];
+  const dir = Math.random() < 0.5 ? -1 : 1;
+  G.events.push({ def, dir, phase:'warn', tt:0 });
+}
+
+function update(dt){
+  if (!G.running) return;
+  const level = 1 + G.t / 40;
+  const warnTime = Math.max(0.75, 1.4 - G.t / 120);
+
+  if (!G.falling){
+    G.t += dt;
+    G.input += (readInput(dt) - G.input) * Math.min(1, dt * 12);
+    G.next -= dt;
+    const longActive = G.events.filter(e => e.def.dur > 1).length;
+    if (G.next <= 0 && longActive < 2){
+      spawn();
+      G.next = rand(2.4, 4.6) / Math.min(2.3, 0.75 + level * 0.3);
+    }
+  } else {
+    G.input *= 0.9;
+  }
+
+  let dist = 0, gMul = 1;
+  for (const e of G.events){
+    e.tt += dt;
+    if (e.phase === 'warn' && e.tt >= warnTime){ e.phase = 'on'; e.tt = 0; G.cause = e; if (e.def.dur < 1) G.shake = 0.35; }
+    if (e.phase === 'on'){
+      if (e.def.sleepy) gMul = 1.9;
+      else dist += e.dir * e.def.f(e.tt) * (0.85 + level * 0.15);
+      if (e.def.wobble && Math.random() < dt * 6) G.notes.push({ x: e.dir < 0 ? 0.12 : 0.88, y: 0, life: 1.4 });
+      if (e.tt >= e.def.dur){ e.done = true; if (!G.falling) G.dodged++; }
+    }
+  }
+  G.events = G.events.filter(e => !e.done);
+  G.sleepy += ((gMul > 1 ? 1 : 0) - G.sleepy) * Math.min(1, dt * 2);
+
+  /* Con lắc ngược: trọng lực làm ngã thêm, người chơi đẩy lại. Thêm một chút rung nhẹ cho có sức sống. */
+  const grav = (0.8 + level * 0.3) * gMul;
+  const noise = Math.min(1, G.t / 20) * (0.3 * Math.sin(G.t * 1.7) + 0.2 * Math.sin(G.t * 3.1 + 1));
+  const control = G.falling ? 0 : 5.5 * G.input;
+  const alpha = grav * Math.sin(G.theta) * (G.falling ? 3 : 1) - 1.1 * G.omega + control + dist + noise;
+  G.omega += alpha * dt;
+  G.theta += G.omega * dt;
+
+  if (!G.falling){
+    const a = Math.abs(G.theta);
+    let rate = a < 0.15 ? 1.6 : a < 0.35 ? 1 : 0.3;
+    if (G.sleepy > 0.5) rate *= 0.5;
+    G.focus += rate * dt;
+    if (a > 0.8){ G.falling = true; G.shake = 0.4; }
+  } else if (Math.abs(G.theta) > 1.45){
+    G.theta = Math.sign(G.theta) * 1.45; G.omega = 0;
+    gameOver();
+  }
+
+  G.shake = Math.max(0, G.shake - dt);
+  for (const n of G.notes){ n.life -= dt; n.y += dt; }
+  G.notes = G.notes.filter(n => n.life > 0);
+
+  const pages = Math.floor(G.focus / 3);
+  $('pages').textContent = pages;
+  $('clock').textContent = fmtClock(G.t);
+  const warn = G.events.find(e => e.phase === 'warn');
+  const on = G.events.find(e => e.phase === 'on');
+  const show = warn || on;
+  $('banner').hidden = !show;
+  if (show) $('banner').textContent = `${show.def.icon} ${show.def.name} ${show.def.sleepy ? '' : (show.dir < 0 ? '← kéo sang trái' : 'kéo sang phải →')}`;
+}
+
+function fmtClock(t){
+  const m = 20 * 60 + Math.floor(t);
+  return `${String(Math.floor(m / 60) % 24).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
+}
+function fmtDuration(t){
+  const m = Math.floor(t), h = Math.floor(m / 60);
+  return h ? `${h} giờ ${m % 60} phút` : `${m} phút`;
+}
+
+function gameOver(){
+  G.running = false; G.over = true;
+  const pages = Math.floor(G.focus / 3);
+  if (pages > best){ best = pages; try { localStorage.setItem('ngoivung-best', best); } catch(e) {} }
+  $('cause').textContent = G.cause ? `Thủ phạm: ${G.cause.def.icon} ${G.cause.def.name}` : 'Thủ phạm: tự nghiêng một mình 😅';
+  $('sTime').textContent = fmtDuration(G.t);
+  $('sPages').textContent = pages;
+  $('sBest').textContent = best;
+  $('sDodged').textContent = G.dodged;
+  $('banner').hidden = true;
+  $('overScreen').hidden = false;
+  try { wakeLock?.release(); } catch(e) {}
+}
+
+/* ---------- Vẽ ---------- */
+function rr(x, y, w, h, r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+
+function drawRoom(floorY){
+  const g = ctx.createLinearGradient(0, 0, 0, floorY);
+  g.addColorStop(0, '#161d33'); g.addColorStop(1, '#232c4b');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, floorY);
+  // cửa sổ có trăng
+  const wx = W * 0.08, wy = H * 0.16, ww = Math.min(W * 0.32, 150 * S), wh = ww * 1.1;
+  ctx.fillStyle = '#0b1022'; rr(wx, wy, ww, wh, 6); ctx.fill();
+  ctx.fillStyle = '#f7e7b5'; ctx.beginPath(); ctx.arc(wx + ww * 0.68, wy + wh * 0.3, ww * 0.13, 0, 7); ctx.fill();
+  ctx.fillStyle = '#0b1022'; ctx.beginPath(); ctx.arc(wx + ww * 0.62, wy + wh * 0.27, ww * 0.12, 0, 7); ctx.fill();
+  ctx.fillStyle = '#c9d2ee';
+  [[.2,.2],[.35,.55],[.15,.75],[.8,.7],[.5,.12]].forEach(([a,b]) => ctx.fillRect(wx + ww * a, wy + wh * b, 2, 2));
+  ctx.strokeStyle = '#3a4570'; ctx.lineWidth = 5 * S; rr(wx, wy, ww, wh, 6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(wx + ww / 2, wy); ctx.lineTo(wx + ww / 2, wy + wh); ctx.moveTo(wx, wy + wh / 2); ctx.lineTo(wx + ww, wy + wh / 2); ctx.stroke();
+  // lịch treo tường
+  const cx = W * 0.82, cy = H * 0.2, cw = 60 * S;
+  ctx.fillStyle = '#e9e2d0'; rr(cx - cw / 2, cy, cw, cw * 1.1, 4); ctx.fill();
+  ctx.fillStyle = '#ff6f61'; ctx.fillRect(cx - cw / 2, cy, cw, cw * 0.28);
+  ctx.fillStyle = '#2a2a3a'; ctx.font = `800 ${26 * S}px 'Baloo 2', sans-serif`; ctx.textAlign = 'center';
+  ctx.fillText('18', cx, cy + cw * 0.85);
+  ctx.font = `600 ${9 * S}px 'Be Vietnam Pro', sans-serif`; ctx.fillStyle = '#fff'; ctx.fillText('THI', cx, cy + cw * 0.2);
+  // sàn
+  ctx.fillStyle = '#2b2236'; ctx.fillRect(0, floorY, W, H - floorY);
+}
+
+function drawStudent(cx, floorY, theta, gazeDir){
+  ctx.save();
+  ctx.translate(cx, floorY); ctx.rotate(theta); ctx.scale(S, S);
+  // ghế
+  ctx.strokeStyle = '#1a1e30'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-48, -112); ctx.lineTo(-56, 0); ctx.moveTo(48, -112); ctx.lineTo(56, 0); ctx.stroke();
+  ctx.fillStyle = '#2b3150'; rr(-58, -240, 116, 125, 14); ctx.fill();
+  ctx.fillStyle = '#353c62'; rr(-64, -126, 128, 16, 6); ctx.fill();
+  // thân (áo hoodie)
+  ctx.fillStyle = '#4f86c6'; rr(-44, -214, 88, 104, 22); ctx.fill();
+  ctx.fillStyle = '#3f6fa8'; rr(-18, -170, 36, 26, 8); ctx.fill();
+  // tay
+  ctx.strokeStyle = '#4f86c6'; ctx.lineWidth = 18;
+  ctx.beginPath(); ctx.moveTo(-36, -198); ctx.quadraticCurveTo(-62, -160, -34, -136); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(36, -198); ctx.quadraticCurveTo(62, -160, 34, -136); ctx.stroke();
+  ctx.fillStyle = '#f0c49c';
+  ctx.beginPath(); ctx.arc(-32, -134, 9, 0, 7); ctx.arc(32, -134, 9, 0, 7); ctx.fill();
+  // bút chì
+  ctx.strokeStyle = '#ffc45c'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(34, -136); ctx.lineTo(48, -158); ctx.stroke();
+  // cổ, đầu
+  ctx.fillStyle = '#e6b78f'; ctx.fillRect(-9, -228, 18, 18);
+  ctx.fillStyle = '#f0c49c'; ctx.beginPath(); ctx.arc(0, -258, 34, 0, 7); ctx.fill();
+  // tóc
+  ctx.fillStyle = '#2a1e1a';
+  ctx.beginPath(); ctx.arc(0, -264, 36, Math.PI * 1.02, Math.PI * 1.98); ctx.quadraticCurveTo(20, -276, -2, -270); ctx.quadraticCurveTo(-20, -262, -35, -266); ctx.fill();
+  // mắt
+  const a = Math.abs(theta), gx = gazeDir * 5;
+  ctx.fillStyle = '#1d1a22'; ctx.strokeStyle = '#1d1a22'; ctx.lineWidth = 3;
+  if (G.sleepy > 0.5){
+    ctx.beginPath(); ctx.moveTo(-17, -256); ctx.lineTo(-6, -256); ctx.moveTo(6, -256); ctx.lineTo(17, -256); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(-12 + gx, -257, 4, 0, 7); ctx.arc(12 + gx, -257, 4, 0, 7); ctx.fill();
+  }
+  // lông mày lo lắng khi nghiêng nhiều
+  if (a > 0.4){
+    ctx.beginPath(); ctx.moveTo(-19, -270); ctx.lineTo(-7, -266); ctx.moveTo(19, -270); ctx.lineTo(7, -266); ctx.stroke();
+  }
+  // miệng
+  ctx.beginPath();
+  if (a > 0.5){ ctx.arc(0, -238, 6, 0, 7); ctx.fillStyle = '#7a2e2e'; ctx.fill(); }
+  else if (a < 0.15){ ctx.arc(0, -244, 8, 0.2, Math.PI - 0.2); ctx.stroke(); }
+  else { ctx.moveTo(-6, -240); ctx.lineTo(6, -240); ctx.stroke(); }
+  // má hồng
+  ctx.fillStyle = 'rgba(255,120,110,.35)'; ctx.beginPath(); ctx.arc(-22, -246, 6, 0, 7); ctx.arc(22, -246, 6, 0, 7); ctx.fill();
+  if (G.sleepy > 0.5){
+    ctx.fillStyle = '#c9d2ee'; ctx.font = "800 22px 'Baloo 2', sans-serif"; ctx.textAlign = 'left';
+    const z = (G.t * 1.5) % 1;
+    ctx.globalAlpha = 1 - z; ctx.fillText('z', 36, -290 - z * 30); ctx.font = "800 16px 'Baloo 2', sans-serif"; ctx.fillText('z', 52, -310 - z * 30);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+function drawDesk(cx, floorY){
+  const top = floorY - 140 * S, dw = Math.min(W * 0.94, 400 * S), x0 = cx - dw / 2;
+  // ánh đèn
+  const lx = x0 + dw * 0.12, ly = top - 92 * S;
+  const lg = ctx.createRadialGradient(lx, ly + 40 * S, 10 * S, lx, top, 230 * S);
+  lg.addColorStop(0, 'rgba(255,196,92,.42)'); lg.addColorStop(1, 'rgba(255,196,92,0)');
+  ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
+  // mặt bàn
+  ctx.fillStyle = '#7a5038'; rr(x0, top, dw, 20 * S, 6 * S); ctx.fill();
+  ctx.fillStyle = '#5c3b29'; ctx.fillRect(x0 + 10 * S, top + 20 * S, dw - 20 * S, floorY - top - 20 * S);
+  ctx.fillStyle = '#4c3022'; ctx.fillRect(x0 + 24 * S, top + 36 * S, dw - 48 * S, 4 * S);
+  ctx.fillStyle = '#8e5f45'; rr(cx - 26 * S, top + 54 * S, 52 * S, 8 * S, 4 * S); ctx.fill();
+  // vở mở
+  ctx.fillStyle = '#f4efe4'; ctx.beginPath();
+  ctx.moveTo(cx - 70 * S, top + 2 * S); ctx.lineTo(cx, top - 6 * S); ctx.lineTo(cx + 70 * S, top + 2 * S); ctx.lineTo(cx + 70 * S, top + 8 * S); ctx.lineTo(cx - 70 * S, top + 8 * S); ctx.fill();
+  // đèn bàn
+  ctx.strokeStyle = '#ffc45c'; ctx.lineWidth = 5 * S; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(lx, top); ctx.lineTo(lx + 12 * S, top - 55 * S); ctx.lineTo(lx, ly + 10 * S); ctx.stroke();
+  ctx.fillStyle = '#ffc45c'; ctx.beginPath(); ctx.moveTo(lx - 26 * S, ly + 22 * S); ctx.lineTo(lx + 22 * S, ly + 22 * S); ctx.lineTo(lx + 8 * S, ly); ctx.lineTo(lx - 10 * S, ly); ctx.fill();
+  ctx.fillStyle = '#fff6d6'; ctx.beginPath(); ctx.arc(lx - 2 * S, ly + 23 * S, 7 * S, 0, Math.PI); ctx.fill();
+  ctx.fillStyle = '#c8962e'; rr(lx - 16 * S, top - 6 * S, 32 * S, 7 * S, 3 * S); ctx.fill();
+  // chồng sách
+  const bx = x0 + dw * 0.8;
+  [['#ff6f61', 50], ['#62d2a2', 44], ['#8f9cff', 54]].forEach(([c, w], i) => {
+    ctx.fillStyle = c; rr(bx - w * S / 2, top - (i + 1) * 13 * S, w * S, 12 * S, 3 * S); ctx.fill();
+  });
+}
+
+function drawDistractions(floorY){
+  const y = floorY - 270 * S;
+  for (const e of G.events){
+    const x = e.dir < 0 ? 46 * S + 10 : W - 46 * S - 10;
+    const blink = e.phase === 'warn' ? (Math.sin(e.tt * 18) > 0 ? 1 : 0.35) : 1;
+    const jig = e.phase === 'on' ? Math.sin(G.t * 40) * 3 : 0;
+    const yy = e.def.sleepy ? floorY - 380 * S : y;
+    const xx = e.def.sleepy ? W / 2 : x;
+    ctx.globalAlpha = blink;
+    ctx.fillStyle = e.phase === 'warn' ? 'rgba(255,111,97,.22)' : 'rgba(255,196,92,.22)';
+    ctx.beginPath(); ctx.arc(xx + jig, yy, 38 * S, 0, 7); ctx.fill();
+    ctx.strokeStyle = e.phase === 'warn' ? '#ff6f61' : '#ffc45c'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.font = `${38 * S}px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(e.def.icon, xx + jig, yy + 2);
+    if (!e.def.sleepy){
+      ctx.fillStyle = '#ff6f61'; ctx.font = `800 ${26 * S}px 'Baloo 2', sans-serif`;
+      const ax = e.dir < 0 ? xx + 52 * S : xx - 52 * S;
+      ctx.fillText(e.dir < 0 ? '‹‹' : '››', ax, yy);
+    }
+    ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+  }
+  ctx.fillStyle = '#ffc45c'; ctx.font = `800 ${24 * S}px 'Baloo 2', sans-serif`; ctx.textAlign = 'center';
+  for (const n of G.notes){
+    ctx.globalAlpha = Math.min(1, n.life);
+    ctx.fillText('♪', W * n.x + Math.sin(n.life * 6) * 10, y - 30 * S - n.y * 60 * S);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawMeter(floorY){
+  const w = Math.min(W - 40, 260 * S), x0 = W / 2 - w / 2, y = Math.min(H - 44, floorY + (H - floorY) / 2);
+  ctx.fillStyle = 'rgba(255,255,255,.08)'; rr(x0, y - 9, w, 18, 9); ctx.fill();
+  const dz = w * 0.18;
+  ctx.fillStyle = 'rgba(255,111,97,.45)'; rr(x0, y - 9, dz, 18, 9); ctx.fill(); rr(x0 + w - dz, y - 9, dz, 18, 9); ctx.fill();
+  ctx.fillStyle = 'rgba(98,210,162,.35)'; ctx.fillRect(W / 2 - w * 0.09, y - 9, w * 0.18, 18);
+  // tay người chơi
+  ctx.fillStyle = 'rgba(244,239,228,.5)';
+  ctx.fillRect(W / 2 + G.input * w / 2 - 2, y - 13, 4, 26);
+  // độ nghiêng
+  const px = W / 2 + clamp(G.theta / 0.8, -1, 1) * (w / 2 - 10);
+  const danger = Math.abs(G.theta) > 0.5;
+  ctx.fillStyle = danger ? '#ff6f61' : '#ffc45c';
+  ctx.beginPath(); ctx.arc(px, y, 10, 0, 7); ctx.fill();
+}
+
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(1 / 30, (now - last) / 1000); last = now;
+  update(dt);
+  const floorY = H * 0.84;
+  ctx.save();
+  if (G.shake > 0) ctx.translate(rand(-4, 4) * G.shake * 3, rand(-3, 3) * G.shake * 3);
+  drawRoom(floorY);
+  const gaze = G.events.length ? G.events[G.events.length - 1].dir : 0;
+  drawStudent(W / 2, floorY, G.theta, G.events.some(e => e.def.sleepy) ? 0 : gaze);
+  drawDesk(W / 2, floorY);
+  drawDistractions(floorY);
+  ctx.restore();
+  if (G.sleepy > 0.02){ ctx.fillStyle = `rgba(5,7,15,${G.sleepy * 0.45})`; ctx.fillRect(0, 0, W, H); }
+  const a = Math.abs(G.theta);
+  if (G.running && a > 0.5){
+    const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
+    v.addColorStop(0, 'rgba(255,111,97,0)'); v.addColorStop(1, `rgba(255,111,97,${(a - 0.5) * 1.2})`);
+    ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  }
+  drawMeter(floorY);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+document.addEventListener('visibilitychange', () => { last = performance.now(); });
+updateMode();
+})();
+</script>
+
+</body>
+</html>
