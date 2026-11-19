@@ -89,7 +89,7 @@ button.friend .p{color:var(--lamp);font-variant-numeric:tabular-nums}
 <div id="app">
   <canvas id="c"></canvas>
   <div class="hud">
-    <div class="chip"><span>Giờ</span><b id="clock">20:00</b></div>
+    <div class="chip"><span id="clock">20:00</span><b id="alive">20/20</b></div>
     <div class="chip" id="ammoChip" hidden><span>Lượt ném</span><b id="ammo">0</b></div>
     <div class="chip r"><span>Trang đã học</span><b id="pages">0</b></div>
   </div>
@@ -173,10 +173,23 @@ const EVENTS = [
   { icon:'😴', name:'Buồn ngủ quá',         dur:5.0,  sleepy:true,   min:36 },
 ];
 
+/* Cả lớp 20 bạn, điều khiển chung một cú nghiêng. Mỗi bạn nhạy khác nhau và tự lắc lư một chút, nên sẽ ngã dần từng người. */
+const CLASS_SIZE = 20;
+const LOOKS = ['#4f86c6', '#e07a5f', '#62b58f', '#9b7fd1', '#e9b949', '#d96c8a', '#5aa9c9', '#c2c9d6'];
+const HAIRS = ['#2a1e1a', '#3b2a20', '#1c1a22', '#6b3e26', '#4a2f1d'];
+function makeKids(){
+  const kids = [];
+  for (let i = 0; i < CLASS_SIZE; i++){
+    kids.push({ gain: 0.7 + Math.random() * 0.75, wob: 0.06 + Math.random() * 0.12, wf: 1 + Math.random() * 2.5,
+      ph: Math.random() * 7, fallen: false, ang: 0, vel: 0, lean: 0, off: 0, offV: 0,
+      hoodie: LOOKS[i % LOOKS.length], hair: HAIRS[(i * 3) % HAIRS.length] });
+  }
+  return kids;
+}
 const G = {};
 function reset(){
   Object.assign(G, { running:false, over:false, falling:false, t:0, theta:0, omega:0, input:0,
-    focus:0, events:[], next:2.2, cause:null, sleepy:0, shake:0, dodged:0, notes:[] });
+    focus:0, events:[], next:2.2, cause:null, sleepy:0, shake:0, dodged:0, notes:[], kids:makeKids(), standing:CLASS_SIZE, fallT:0 });
 }
 reset();
 
@@ -276,13 +289,13 @@ function update(dt){
     G.input *= 0.9;
   }
 
-  let dist = 0, gMul = 1;
+  let dist = 0, gMul = 1, distL = 0, distR = 0;
   for (const e of G.events){
     e.tt += dt;
     if (e.phase === 'warn' && e.tt >= warnTime){ e.phase = 'on'; e.tt = 0; G.cause = e; if (e.def.dur < 1) G.shake = 0.35; }
     if (e.phase === 'on'){
       if (e.def.sleepy) gMul = 1.9;
-      else dist += e.dir * e.def.f(e.tt) * (0.85 + level * 0.15);
+      else { const f = e.dir * e.def.f(e.tt) * (0.85 + level * 0.15); dist += f; if (e.dir < 0) distL += f; else distR += f; }
       if (e.def.wobble && Math.random() < dt * 6) G.notes.push({ x: e.dir < 0 ? 0.12 : 0.88, y: 0, life: 1.4 });
       if (e.tt >= e.def.dur){ e.done = true; if (!G.falling) G.dodged++; }
     }
@@ -298,14 +311,34 @@ function update(dt){
   G.omega += alpha * dt;
   G.theta += G.omega * dt;
 
+  G.theta = clamp(G.theta, -1.6, 1.6);
+
+  let standing = 0, rateSum = 0;
+  const cols = classLayout().cols;
+  G.kids.forEach((k, i) => {
+    /* Bạn ngồi gần phía có xao nhãng bị kéo mạnh hơn (lò xo ổn định, không tự ngã thêm). */
+    const x = (i % cols) / (cols - 1);
+    const push = (distL * (1 - x) + distR * x) * 0.7;
+    k.offV += (push - 6 * k.off - 3 * k.offV) * dt; k.off += k.offV * dt;
+  });
+  for (const k of G.kids){
+    if (!k.fallen){
+      k.lean = k.gain * G.theta + k.off + k.wob * Math.sin(G.t * k.wf + k.ph) * Math.min(1, G.t / 5);
+      const a = Math.abs(k.lean);
+      if (a > 0.8){ k.fallen = true; k.ang = k.lean; k.vel = G.omega * k.gain; G.shake = Math.max(G.shake, 0.15); continue; }
+      standing++;
+      rateSum += a < 0.15 ? 1.6 : a < 0.35 ? 1 : 0.3;
+    } else if (Math.abs(k.ang) < 1.45){
+      k.vel += Math.sign(k.ang) * 6 * dt; k.ang += k.vel * dt;
+      if (Math.abs(k.ang) >= 1.45) k.ang = Math.sign(k.ang) * 1.45;
+    }
+  }
+  G.standing = standing;
   if (!G.falling){
-    const a = Math.abs(G.theta);
-    let rate = a < 0.15 ? 1.6 : a < 0.35 ? 1 : 0.3;
-    if (G.sleepy > 0.5) rate *= 0.5;
-    G.focus += rate * dt;
-    if (a > 0.8){ G.falling = true; G.shake = 0.4; }
-  } else if (Math.abs(G.theta) > 1.45){
-    G.theta = Math.sign(G.theta) * 1.45; G.omega = 0;
+    if (G.sleepy > 0.5) rateSum *= 0.5;
+    G.focus += rateSum * dt / 10;
+    if (standing === 0){ G.falling = true; G.fallT = 0; G.shake = 0.4; }
+  } else if ((G.fallT += dt) > 1.2){
     gameOver();
   }
 
@@ -316,6 +349,7 @@ function update(dt){
   const pages = Math.floor(G.focus / 3);
   $('pages').textContent = pages;
   $('clock').textContent = fmtClock(G.t);
+  $('alive').textContent = `${G.standing}/${CLASS_SIZE}`;
   const warn = G.events.find(e => e.phase === 'warn');
   const on = G.events.find(e => e.phase === 'on');
   const show = warn || on;
@@ -524,43 +558,19 @@ function gameOver(){
 /* ---------- Vẽ ---------- */
 function rr(x, y, w, h, r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
 
-function drawRoom(floorY){
-  const g = ctx.createLinearGradient(0, 0, 0, floorY);
-  g.addColorStop(0, '#161d33'); g.addColorStop(1, '#232c4b');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, floorY);
-  // cửa sổ có trăng
-  const wx = W * 0.08, wy = H * 0.16, ww = Math.min(W * 0.32, 150 * S), wh = ww * 1.1;
-  ctx.fillStyle = '#0b1022'; rr(wx, wy, ww, wh, 6); ctx.fill();
-  ctx.fillStyle = '#f7e7b5'; ctx.beginPath(); ctx.arc(wx + ww * 0.68, wy + wh * 0.3, ww * 0.13, 0, 7); ctx.fill();
-  ctx.fillStyle = '#0b1022'; ctx.beginPath(); ctx.arc(wx + ww * 0.62, wy + wh * 0.27, ww * 0.12, 0, 7); ctx.fill();
-  ctx.fillStyle = '#c9d2ee';
-  [[.2,.2],[.35,.55],[.15,.75],[.8,.7],[.5,.12]].forEach(([a,b]) => ctx.fillRect(wx + ww * a, wy + wh * b, 2, 2));
-  ctx.strokeStyle = '#3a4570'; ctx.lineWidth = 5 * S; rr(wx, wy, ww, wh, 6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(wx + ww / 2, wy); ctx.lineTo(wx + ww / 2, wy + wh); ctx.moveTo(wx, wy + wh / 2); ctx.lineTo(wx + ww, wy + wh / 2); ctx.stroke();
-  // lịch treo tường
-  const cx = W * 0.82, cy = H * 0.2, cw = 60 * S;
-  ctx.fillStyle = '#e9e2d0'; rr(cx - cw / 2, cy, cw, cw * 1.1, 4); ctx.fill();
-  ctx.fillStyle = '#ff6f61'; ctx.fillRect(cx - cw / 2, cy, cw, cw * 0.28);
-  ctx.fillStyle = '#2a2a3a'; ctx.font = `800 ${26 * S}px 'Baloo 2', sans-serif`; ctx.textAlign = 'center';
-  ctx.fillText('18', cx, cy + cw * 0.85);
-  ctx.font = `600 ${9 * S}px 'Be Vietnam Pro', sans-serif`; ctx.fillStyle = '#fff'; ctx.fillText('THI', cx, cy + cw * 0.2);
-  // sàn
-  ctx.fillStyle = '#2b2236'; ctx.fillRect(0, floorY, W, H - floorY);
-}
-
-function drawStudent(cx, floorY, theta, gazeDir){
+function drawStudent(cx, floorY, theta, gazeDir, sc, look){
   ctx.save();
-  ctx.translate(cx, floorY); ctx.rotate(theta); ctx.scale(S, S);
+  ctx.translate(cx, floorY); ctx.rotate(theta); ctx.scale(sc, sc);
   // ghế
   ctx.strokeStyle = '#1a1e30'; ctx.lineWidth = 8; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(-48, -112); ctx.lineTo(-56, 0); ctx.moveTo(48, -112); ctx.lineTo(56, 0); ctx.stroke();
   ctx.fillStyle = '#2b3150'; rr(-58, -240, 116, 125, 14); ctx.fill();
   ctx.fillStyle = '#353c62'; rr(-64, -126, 128, 16, 6); ctx.fill();
   // thân (áo hoodie)
-  ctx.fillStyle = '#4f86c6'; rr(-44, -214, 88, 104, 22); ctx.fill();
-  ctx.fillStyle = '#3f6fa8'; rr(-18, -170, 36, 26, 8); ctx.fill();
+  ctx.fillStyle = look.hoodie; rr(-44, -214, 88, 104, 22); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.14)'; rr(-18, -170, 36, 26, 8); ctx.fill();
   // tay
-  ctx.strokeStyle = '#4f86c6'; ctx.lineWidth = 18;
+  ctx.strokeStyle = look.hoodie; ctx.lineWidth = 18;
   ctx.beginPath(); ctx.moveTo(-36, -198); ctx.quadraticCurveTo(-62, -160, -34, -136); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(36, -198); ctx.quadraticCurveTo(62, -160, 34, -136); ctx.stroke();
   ctx.fillStyle = '#f0c49c';
@@ -571,7 +581,7 @@ function drawStudent(cx, floorY, theta, gazeDir){
   ctx.fillStyle = '#e6b78f'; ctx.fillRect(-9, -228, 18, 18);
   ctx.fillStyle = '#f0c49c'; ctx.beginPath(); ctx.arc(0, -258, 34, 0, 7); ctx.fill();
   // tóc
-  ctx.fillStyle = '#2a1e1a';
+  ctx.fillStyle = look.hair;
   ctx.beginPath(); ctx.arc(0, -264, 36, Math.PI * 1.02, Math.PI * 1.98); ctx.quadraticCurveTo(20, -276, -2, -270); ctx.quadraticCurveTo(-20, -262, -35, -266); ctx.fill();
   // mắt
   const a = Math.abs(theta), gx = gazeDir * 5;
@@ -601,32 +611,44 @@ function drawStudent(cx, floorY, theta, gazeDir){
   ctx.restore();
 }
 
-function drawDesk(cx, floorY){
-  const top = floorY - 140 * S, dw = Math.min(W * 0.94, 400 * S), x0 = cx - dw / 2;
-  // ánh đèn
-  const lx = x0 + dw * 0.12, ly = top - 92 * S;
-  const lg = ctx.createRadialGradient(lx, ly + 40 * S, 10 * S, lx, top, 230 * S);
-  lg.addColorStop(0, 'rgba(255,196,92,.42)'); lg.addColorStop(1, 'rgba(255,196,92,0)');
-  ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
-  // mặt bàn
-  ctx.fillStyle = '#7a5038'; rr(x0, top, dw, 20 * S, 6 * S); ctx.fill();
-  ctx.fillStyle = '#5c3b29'; ctx.fillRect(x0 + 10 * S, top + 20 * S, dw - 20 * S, floorY - top - 20 * S);
-  ctx.fillStyle = '#4c3022'; ctx.fillRect(x0 + 24 * S, top + 36 * S, dw - 48 * S, 4 * S);
-  ctx.fillStyle = '#8e5f45'; rr(cx - 26 * S, top + 54 * S, 52 * S, 8 * S, 4 * S); ctx.fill();
-  // vở mở
-  ctx.fillStyle = '#f4efe4'; ctx.beginPath();
-  ctx.moveTo(cx - 70 * S, top + 2 * S); ctx.lineTo(cx, top - 6 * S); ctx.lineTo(cx + 70 * S, top + 2 * S); ctx.lineTo(cx + 70 * S, top + 8 * S); ctx.lineTo(cx - 70 * S, top + 8 * S); ctx.fill();
-  // đèn bàn
-  ctx.strokeStyle = '#ffc45c'; ctx.lineWidth = 5 * S; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(lx, top); ctx.lineTo(lx + 12 * S, top - 55 * S); ctx.lineTo(lx, ly + 10 * S); ctx.stroke();
-  ctx.fillStyle = '#ffc45c'; ctx.beginPath(); ctx.moveTo(lx - 26 * S, ly + 22 * S); ctx.lineTo(lx + 22 * S, ly + 22 * S); ctx.lineTo(lx + 8 * S, ly); ctx.lineTo(lx - 10 * S, ly); ctx.fill();
-  ctx.fillStyle = '#fff6d6'; ctx.beginPath(); ctx.arc(lx - 2 * S, ly + 23 * S, 7 * S, 0, Math.PI); ctx.fill();
-  ctx.fillStyle = '#c8962e'; rr(lx - 16 * S, top - 6 * S, 32 * S, 7 * S, 3 * S); ctx.fill();
-  // chồng sách
-  const bx = x0 + dw * 0.8;
-  [['#ff6f61', 50], ['#62d2a2', 44], ['#8f9cff', 54]].forEach(([c, w], i) => {
-    ctx.fillStyle = c; rr(bx - w * S / 2, top - (i + 1) * 13 * S, w * S, 12 * S, 3 * S); ctx.fill();
+function drawBackdrop(){
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#161d33'); g.addColorStop(1, '#2b2236');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+
+function classLayout(){
+  const cols = W < 520 ? 4 : 5, rows = Math.ceil(CLASS_SIZE / cols);
+  const top = 112, bottom = H - 78, gx = Math.max(16, W * 0.03);
+  const cw = (W - 2 * gx) / cols, ch = (bottom - top) / rows;
+  return { cols, top, gx, cw, ch, sc: Math.min(cw / 175, ch / 320) };
+}
+
+function drawClass(){
+  const L = classLayout();
+  const sleepy = G.events.some(e => e.def.sleepy);
+  const gaze = sleepy || !G.events.length ? 0 : G.events[G.events.length - 1].dir;
+  G.kids.forEach((k, i) => {
+    const cx = L.gx + L.cw * (i % L.cols + 0.5);
+    const fy = L.top + L.ch * (Math.floor(i / L.cols) + 1) - 4;
+    // ánh đèn bàn
+    const lg = ctx.createRadialGradient(cx, fy - 140 * L.sc, 4, cx, fy - 140 * L.sc, 150 * L.sc);
+    lg.addColorStop(0, k.fallen ? 'rgba(255,111,97,.16)' : 'rgba(255,196,92,.2)'); lg.addColorStop(1, 'rgba(255,196,92,0)');
+    ctx.fillStyle = lg; ctx.fillRect(cx - 150 * L.sc, fy - 290 * L.sc, 300 * L.sc, 290 * L.sc);
+    drawStudent(cx, fy, k.fallen ? k.ang : k.lean, gaze, L.sc, k);
+    drawMiniDesk(cx, fy, L.sc, k.fallen);
   });
+}
+
+function drawMiniDesk(cx, fy, sc, fallen){
+  const top = fy - 130 * sc, w = 170 * sc;
+  ctx.fillStyle = '#7a5038'; rr(cx - w / 2, top, w, 14 * sc, 4 * sc); ctx.fill();
+  ctx.fillStyle = '#5c3b29'; ctx.fillRect(cx - w / 2 + 8 * sc, top + 14 * sc, w - 16 * sc, fy - top - 14 * sc);
+  ctx.fillStyle = '#f4efe4'; ctx.fillRect(cx - 40 * sc, top - 4 * sc, 80 * sc, 5 * sc);
+  ctx.strokeStyle = '#ffc45c'; ctx.lineWidth = 3 * sc;
+  ctx.beginPath(); ctx.moveTo(cx + w / 2 - 18 * sc, top); ctx.lineTo(cx + w / 2 - 12 * sc, top - 40 * sc); ctx.stroke();
+  ctx.fillStyle = fallen ? '#ff6f61' : '#ffc45c';
+  ctx.beginPath(); ctx.arc(cx + w / 2 - 14 * sc, top - 44 * sc, 9 * sc, 0, 7); ctx.fill();
 }
 
 function drawDistractions(floorY){
@@ -682,10 +704,8 @@ function frame(now){
   const floorY = H * 0.84;
   ctx.save();
   if (G.shake > 0) ctx.translate(rand(-4, 4) * G.shake * 3, rand(-3, 3) * G.shake * 3);
-  drawRoom(floorY);
-  const gaze = G.events.length ? G.events[G.events.length - 1].dir : 0;
-  drawStudent(W / 2, floorY, G.theta, G.events.some(e => e.def.sleepy) ? 0 : gaze);
-  drawDesk(W / 2, floorY);
+  drawBackdrop();
+  drawClass();
   drawDistractions(floorY);
   ctx.restore();
   if (G.sleepy > 0.02){ ctx.fillStyle = `rgba(5,7,15,${G.sleepy * 0.45})`; ctx.fillRect(0, 0, W, H); }

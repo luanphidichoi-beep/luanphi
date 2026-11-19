@@ -1,6 +1,6 @@
 # Ngồi Vững
 
-Game giữ thăng bằng cho một bạn đang ngồi học bài buổi tối. Mấy thứ gây xao nhãng xung quanh (tin nhắn Zalo, mèo nhảy lên bàn, karaoke nhà hàng xóm, mùi mì tôm, buồn ngủ...) sẽ kéo bạn ấy ngã khỏi ghế. Người chơi nghiêng điện thoại để giữ cho bạn ấy ngồi thẳng.
+Game giữ thăng bằng cho cả một lớp 20 bạn đang ngồi học bài buổi tối. Một cú nghiêng điện thoại điều khiển cả lớp, nhưng mỗi bạn nhạy khác nhau, và bạn nào ngồi gần thứ gây xao nhãng thì bị kéo mạnh hơn. Game kết thúc khi cả lớp đều ngã. Mấy thứ gây xao nhãng xung quanh (tin nhắn Zalo, mèo nhảy lên bàn, karaoke nhà hàng xóm, mùi mì tôm, buồn ngủ...) sẽ kéo bạn ấy ngã khỏi ghế. Người chơi nghiêng điện thoại để giữ cho bạn ấy ngồi thẳng.
 
 ## Cách chơi
 
